@@ -1,6 +1,7 @@
+#!/bin/bash
 
-export GIT_REPOSITRY_URL = "$GIT_REPOSITRY_URL"
+export GIT_REPOSITORY_URL="$GIT_REPOSITORY_URL"
 
-git clone "$GIT_REPOSITRY_URL" /home/app/repo
-
+git clone "$GIT_REPOSITORY_URL" /home/app/repo
+cd /home/app
 exec node script.js

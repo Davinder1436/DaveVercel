@@ -1,58 +1,63 @@
-const {exec} = require('child_process');
+const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const {S3Client, PutObjectCommand} = require("@aws-sdk/client-s3");
-const dotenv = require('dotenv');
-dotenv.config()
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const mime = require('mime-types');
 
-const s3 = new S3Client({credentials:{
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-    
-},
-region: process.env.AWS_REGION});
+const s3 = new S3Client({
+    credentials: {
+        accessKeyId: process.env['AWS_ACCESS_KEY_ID'],
+        secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'],
+    },
+    region: "ap-south-1"
+});
 
-const Project_Id = process.env.PROJECT_ID
+const Project_Id = process.env.PROJECT_ID;
 
-async function init(){
-
+async function init() {
     const dirPath = path.join(__dirname, 'repo');
 
-    const p = exec(`cd ${dirPath} && npm install && npm run build`)
-    
-    p.stdout.on('data',(data)=>{
-        console.log(data.tostring())
-    })
-    p.stdout.on('error',(data)=>{
-        console.log(data.tostring())
-    })
-    p.stdout.on('close',async (data)=>{
-        console.log("Build Complete")
-        const distPath = path.join(__dirname, 'repo','dist')
+    const p = exec(`cd ${dirPath} && npm install && npm run build`);
 
-        const distFolderContent = fs.readdirSync(distPath,{recursive:true})
+    p.stdout.on('data', (data) => {
+        console.log(data);
+    });
 
-        for(const filepath in distFolderContent){
-            if( fs.lstatSync(filepath).isDirectory){
-                continue;
+    p.stderr.on('data', (data) => {
+        console.error('Error:', data);
+    });
+
+    p.on('close', async (code) => {
+        console.log("Build Complete");
+
+        const distPath = path.join(__dirname, 'repo', 'build');
+
+        try {
+            const distFolderContent = fs.readdirSync(distPath, { recursive: true });
+            console.log(distFolderContent);
+
+            for (let i = 0; i < distFolderContent.length; i++) {
+                const filepath = path.join(distPath, distFolderContent[i]);
+                if (fs.lstatSync(filepath).isDirectory()) {
+                    continue;
+                }
+
+                console.log("Uploading " + filepath);
+
+                const command = new PutObjectCommand({
+                    Bucket: "dave-vercel",
+                    Key: `DaveVercel/${Project_Id}/${distFolderContent[i]}`,
+                    Body: fs.createReadStream(filepath),
+                    ContentType: mime.lookup(filepath) || 'application/octet-stream' // Fallback content type
+                });
+
+                await s3.send(command);
+                console.log('Uploaded ' + filepath);
             }
-        
-            const command = PutObjectCommand({
-                Bucket: process.env.AWS_BUCKET_NAME,
-                Key:`DaveVercel/${Project_Id}/${filepath}`,
-                Body: fs.createReadStream(filepath),
-                ContentType: mime.lookup(filepath)
-            })
-
-            await s3.send(command);
-            console.log('uploaded ' + filepath)
-        
+        } catch (err) {
+            console.error('Error processing files:', err.message);
         }
-
-            
-            
-
-    })
+    });
 }
 
+init();
